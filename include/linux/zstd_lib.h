@@ -7,33 +7,18 @@
  * in the COPYING file in the root directory of this source tree).
  * You may select, at your option, one of the above-listed licenses.
  */
-#if defined (__cplusplus)
-extern "C" {
-#endif
 
 #ifndef ZSTD_H_235446
 #define ZSTD_H_235446
 
 /* ======   Dependency   ======*/
-#include <limits.h>   /* INT_MAX */
-#include <stddef.h>   /* size_t */
+#include <linux/limits.h>   /* INT_MAX */
+#include <linux/types.h>   /* size_t */
 
 
 /* =====   ZSTDLIB_API : control library symbols visibility   ===== */
-#ifndef ZSTDLIB_VISIBILITY
-#  if defined(__GNUC__) && (__GNUC__ >= 4)
-#    define ZSTDLIB_VISIBILITY __attribute__ ((visibility ("default")))
-#  else
-#    define ZSTDLIB_VISIBILITY
-#  endif
-#endif
-#if defined(ZSTD_DLL_EXPORT) && (ZSTD_DLL_EXPORT==1)
-#  define ZSTDLIB_API __declspec(dllexport) ZSTDLIB_VISIBILITY
-#elif defined(ZSTD_DLL_IMPORT) && (ZSTD_DLL_IMPORT==1)
-#  define ZSTDLIB_API __declspec(dllimport) ZSTDLIB_VISIBILITY /* It isn't required but allows to generate better code, saving a function pointer load from the IAT and an indirect jump.*/
-#else
-#  define ZSTDLIB_API ZSTDLIB_VISIBILITY
-#endif
+#define ZSTDLIB_VISIBILITY 
+#define ZSTDLIB_API ZSTDLIB_VISIBILITY
 
 
 /*******************************************************************************
@@ -1037,7 +1022,7 @@ ZSTDLIB_API size_t ZSTD_sizeof_DDict(const ZSTD_DDict* ddict);
  * Use them only in association with static linking.
  * ***************************************************************************************/
 
-#if defined(ZSTD_STATIC_LINKING_ONLY) && !defined(ZSTD_H_ZSTD_STATIC_LINKING_ONLY)
+#if !defined(ZSTD_H_ZSTD_STATIC_LINKING_ONLY)
 #define ZSTD_H_ZSTD_STATIC_LINKING_ONLY
 
 /****************************************************************************************
@@ -1390,9 +1375,7 @@ typedef void* (*ZSTD_allocFunction) (void* opaque, size_t size);
 typedef void  (*ZSTD_freeFunction) (void* opaque, void* address);
 typedef struct { ZSTD_allocFunction customAlloc; ZSTD_freeFunction customFree; void* opaque; } ZSTD_customMem;
 static
-#ifdef __GNUC__
 __attribute__((__unused__))
-#endif
 ZSTD_customMem const ZSTD_defaultCMem = { NULL, NULL, NULL };  /**< this constant defers to stdlib's functions */
 
 ZSTDLIB_API ZSTD_CCtx*    ZSTD_createCCtx_advanced(ZSTD_customMem customMem);
@@ -2119,6 +2102,3 @@ ZSTDLIB_API size_t ZSTD_insertBlock    (ZSTD_DCtx* dctx, const void* blockStart,
 
 #endif   /* ZSTD_H_ZSTD_STATIC_LINKING_ONLY */
 
-#if defined (__cplusplus)
-}
-#endif

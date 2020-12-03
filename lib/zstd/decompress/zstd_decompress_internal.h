@@ -123,7 +123,7 @@ struct ZSTD_DCtx_s
     ZSTD_dStage stage;
     U32 litEntropy;
     U32 fseEntropy;
-    XXH64_state_t xxhState;
+    struct xxh64_state xxhState;
     size_t headerSize;
     ZSTD_format_e format;
     ZSTD_forceIgnoreChecksum_e forceIgnoreChecksum;   /* User specified: if == 1, will ignore checksums in compressed frame. Default == 0 */

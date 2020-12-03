@@ -12,9 +12,6 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
 
 #ifndef HUF_H_298734234
 #define HUF_H_298734234
@@ -106,7 +103,7 @@ HUF_PUBLIC_API size_t HUF_compress4X_wksp (void* dst, size_t dstCapacity,
  *  because they are not guaranteed to remain stable in the future.
  *  Only consider them in association with static linking.
  * *****************************************************************/
-#if defined(HUF_STATIC_LINKING_ONLY) && !defined(HUF_H_HUF_STATIC_LINKING_ONLY)
+#if !defined(HUF_H_HUF_STATIC_LINKING_ONLY)
 #define HUF_H_HUF_STATIC_LINKING_ONLY
 
 /* *** Dependencies *** */
@@ -353,6 +350,3 @@ size_t HUF_readDTableX1_wksp_bmi2(HUF_DTable* DTable, const void* src, size_t sr
 
 #endif /* HUF_STATIC_LINKING_ONLY */
 
-#if defined (__cplusplus)
-}
-#endif

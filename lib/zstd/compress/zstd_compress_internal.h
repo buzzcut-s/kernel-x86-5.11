@@ -20,13 +20,7 @@
 ***************************************/
 #include "../common/zstd_internal.h"
 #include "zstd_cwksp.h"
-#ifdef ZSTD_MULTITHREAD
-#  include "zstdmt_compress.h"
-#endif
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
 
 
 /*-*************************************
@@ -248,7 +242,7 @@ struct ZSTD_CCtx_s {
     unsigned long long pledgedSrcSizePlusOne;  /* this way, 0 (default) == unknown */
     unsigned long long consumedSrcSize;
     unsigned long long producedCSize;
-    XXH64_state_t xxhState;
+    struct xxh64_state xxhState;
     ZSTD_customMem customMem;
     size_t staticSize;
     SeqCollector seqCollector;
@@ -282,9 +276,6 @@ struct ZSTD_CCtx_s {
     ZSTD_prefixDict prefixDict;   /* single-usage dictionary */
 
     /* Multi-threading */
-#ifdef ZSTD_MULTITHREAD
-    ZSTDMT_CCtx* mtctx;
-#endif
 };
 
 typedef enum { ZSTD_dtlm_fast, ZSTD_dtlm_full } ZSTD_dictTableLoadMethod_e;
@@ -500,14 +491,7 @@ static unsigned ZSTD_NbCommonBytes (size_t val)
 {
     if (MEM_isLittleEndian()) {
         if (MEM_64bits()) {
-#       if defined(_MSC_VER) && defined(_WIN64)
-#           if STATIC_BMI2
-                return _tzcnt_u64(val) >> 3;
-#           else
-                unsigned long r = 0;
-                return _BitScanForward64( &r, (U64)val ) ? (unsigned)(r >> 3) : 0;
-#           endif
-#       elif defined(__GNUC__) && (__GNUC__ >= 4)
+#       if (__GNUC__ >= 4)
             return (__builtin_ctzll((U64)val) >> 3);
 #       else
             static const int DeBruijnBytePos[64] = { 0, 0, 0, 0, 0, 1, 1, 2,
@@ -521,10 +505,7 @@ static unsigned ZSTD_NbCommonBytes (size_t val)
             return DeBruijnBytePos[((U64)((val & -(long long)val) * 0x0218A392CDABBD3FULL)) >> 58];
 #       endif
         } else { /* 32 bits */
-#       if defined(_MSC_VER)
-            unsigned long r=0;
-            return _BitScanForward( &r, (U32)val ) ? (unsigned)(r >> 3) : 0;
-#       elif defined(__GNUC__) && (__GNUC__ >= 3)
+#       if (__GNUC__ >= 3)
             return (__builtin_ctz((U32)val) >> 3);
 #       else
             static const int DeBruijnBytePos[32] = { 0, 0, 3, 0, 3, 1, 3, 0,
@@ -536,14 +517,7 @@ static unsigned ZSTD_NbCommonBytes (size_t val)
         }
     } else {  /* Big Endian CPU */
         if (MEM_64bits()) {
-#       if defined(_MSC_VER) && defined(_WIN64)
-#           if STATIC_BMI2
-			    return _lzcnt_u64(val) >> 3;
-#           else
-			    unsigned long r = 0;
-			    return _BitScanReverse64(&r, (U64)val) ? (unsigned)(r >> 3) : 0;
-#           endif
-#       elif defined(__GNUC__) && (__GNUC__ >= 4)
+#       if (__GNUC__ >= 4)
             return (__builtin_clzll(val) >> 3);
 #       else
             unsigned r;
@@ -554,10 +528,7 @@ static unsigned ZSTD_NbCommonBytes (size_t val)
             return r;
 #       endif
         } else { /* 32 bits */
-#       if defined(_MSC_VER)
-            unsigned long r = 0;
-            return _BitScanReverse( &r, (unsigned long)val ) ? (unsigned)(r >> 3) : 0;
-#       elif defined(__GNUC__) && (__GNUC__ >= 3)
+#       if (__GNUC__ >= 3)
             return (__builtin_clz((U32)val) >> 3);
 #       else
             unsigned r;
@@ -1041,9 +1012,6 @@ MEM_STATIC void ZSTD_debugTable(const U32* table, U32 max)
 #endif
 
 
-#if defined (__cplusplus)
-}
-#endif
 
 /* ===============================================================
  * Shared internal declarations

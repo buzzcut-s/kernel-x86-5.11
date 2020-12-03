@@ -11,9 +11,6 @@
 #ifndef ZSTD_LAZY_H
 #define ZSTD_LAZY_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
 
 #include "zstd_compress_internal.h"
 
@@ -60,8 +57,5 @@ size_t ZSTD_compressBlock_btlazy2_extDict(
         ZSTD_matchState_t* ms, seqStore_t* seqStore, U32 rep[ZSTD_REP_NUM],
         void const* src, size_t srcSize);
 
-#if defined (__cplusplus)
-}
-#endif
 
 #endif /* ZSTD_LAZY_H */

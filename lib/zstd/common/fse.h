@@ -12,9 +12,6 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
 
 #ifndef FSE_H
 #define FSE_H
@@ -289,7 +286,7 @@ If there is an error, the function will return an error code, which can be teste
 
 #endif  /* FSE_H */
 
-#if defined(FSE_STATIC_LINKING_ONLY) && !defined(FSE_H_FSE_STATIC_LINKING_ONLY)
+#if !defined(FSE_H_FSE_STATIC_LINKING_ONLY)
 #define FSE_H_FSE_STATIC_LINKING_ONLY
 
 /* *** Dependency *** */
@@ -710,6 +707,3 @@ MEM_STATIC unsigned FSE_endOfDState(const FSE_DState_t* DStatePtr)
 #endif /* FSE_STATIC_LINKING_ONLY */
 
 
-#if defined (__cplusplus)
-}
-#endif

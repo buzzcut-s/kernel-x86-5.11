@@ -681,7 +681,7 @@ ZSTD_compressBlock_lazy_generic(
     }
 
     /* Match Loop */
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__x86_64__)
     /* I've measured random a 5% speed loss on levels 5 & 6 (greedy) when the
      * code alignment is perturbed. To fix the instability align the loop on 32-bytes.
      */
@@ -958,7 +958,7 @@ size_t ZSTD_compressBlock_lazy_extDict_generic(
     ip += (ip == prefixStart);
 
     /* Match Loop */
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__x86_64__)
     /* I've measured random a 5% speed loss on levels 5 & 6 (greedy) when the
      * code alignment is perturbed. To fix the instability align the loop on 32-bytes.
      */

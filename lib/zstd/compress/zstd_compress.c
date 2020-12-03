@@ -38,9 +38,6 @@
  * on stack (0, default), or into heap (1).
  * Note that functions with explicit context such as ZSTD_compressCCtx() are unaffected.
  */
-#ifndef ZSTD_COMPRESS_HEAPMODE
-#  define ZSTD_COMPRESS_HEAPMODE 0
-#endif
 
 
 /*-*************************************
@@ -150,9 +147,6 @@ static void ZSTD_freeCCtxContent(ZSTD_CCtx* cctx)
     assert(cctx != NULL);
     assert(cctx->staticSize == 0);
     ZSTD_clearAllDicts(cctx);
-#ifdef ZSTD_MULTITHREAD
-    ZSTDMT_freeCCtx(cctx->mtctx); cctx->mtctx = NULL;
-#endif
     ZSTD_cwksp_free(&cctx->workspace, cctx->customMem);
 }
 
@@ -174,12 +168,8 @@ size_t ZSTD_freeCCtx(ZSTD_CCtx* cctx)
 
 static size_t ZSTD_sizeof_mtctx(const ZSTD_CCtx* cctx)
 {
-#ifdef ZSTD_MULTITHREAD
-    return ZSTDMT_sizeof_CCtx(cctx->mtctx);
-#else
     (void)cctx;
     return 0;
-#endif
 }
 
 
@@ -340,30 +330,17 @@ ZSTD_bounds ZSTD_cParam_getBounds(ZSTD_cParameter param)
 
     case ZSTD_c_nbWorkers:
         bounds.lowerBound = 0;
-#ifdef ZSTD_MULTITHREAD
-        bounds.upperBound = ZSTDMT_NBWORKERS_MAX;
-#else
         bounds.upperBound = 0;
-#endif
         return bounds;
 
     case ZSTD_c_jobSize:
         bounds.lowerBound = 0;
-#ifdef ZSTD_MULTITHREAD
-        bounds.upperBound = ZSTDMT_JOBSIZE_MAX;
-#else
         bounds.upperBound = 0;
-#endif
         return bounds;
 
     case ZSTD_c_overlapLog:
-#ifdef ZSTD_MULTITHREAD
-        bounds.lowerBound = ZSTD_OVERLAPLOG_MIN;
-        bounds.upperBound = ZSTD_OVERLAPLOG_MAX;
-#else
         bounds.lowerBound = 0;
         bounds.upperBound = 0;
-#endif
         return bounds;
 
     case ZSTD_c_enableLongDistanceMatching:
@@ -637,48 +614,20 @@ size_t ZSTD_CCtxParams_setParameter(ZSTD_CCtx_params* CCtxParams,
     }
 
     case ZSTD_c_nbWorkers :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR_IF(value!=0, parameter_unsupported, "not compiled with multithreading");
         return 0;
-#else
-        FORWARD_IF_ERROR(ZSTD_cParam_clampBounds(param, &value), "");
-        CCtxParams->nbWorkers = value;
-        return CCtxParams->nbWorkers;
-#endif
 
     case ZSTD_c_jobSize :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR_IF(value!=0, parameter_unsupported, "not compiled with multithreading");
         return 0;
-#else
-        /* Adjust to the minimum non-default value. */
-        if (value != 0 && value < ZSTDMT_JOBSIZE_MIN)
-            value = ZSTDMT_JOBSIZE_MIN;
-        FORWARD_IF_ERROR(ZSTD_cParam_clampBounds(param, &value), "");
-        assert(value >= 0);
-        CCtxParams->jobSize = value;
-        return CCtxParams->jobSize;
-#endif
 
     case ZSTD_c_overlapLog :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR_IF(value!=0, parameter_unsupported, "not compiled with multithreading");
         return 0;
-#else
-        FORWARD_IF_ERROR(ZSTD_cParam_clampBounds(ZSTD_c_overlapLog, &value), "");
-        CCtxParams->overlapLog = value;
-        return CCtxParams->overlapLog;
-#endif
 
     case ZSTD_c_rsyncable :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR_IF(value!=0, parameter_unsupported, "not compiled with multithreading");
         return 0;
-#else
-        FORWARD_IF_ERROR(ZSTD_cParam_clampBounds(ZSTD_c_overlapLog, &value), "");
-        CCtxParams->rsyncable = value;
-        return CCtxParams->rsyncable;
-#endif
 
     case ZSTD_c_enableLongDistanceMatching :
         CCtxParams->ldmParams.enableLdm = (value!=0);
@@ -780,33 +729,15 @@ size_t ZSTD_CCtxParams_getParameter(
         *value = CCtxParams->literalCompressionMode;
         break;
     case ZSTD_c_nbWorkers :
-#ifndef ZSTD_MULTITHREAD
         assert(CCtxParams->nbWorkers == 0);
-#endif
         *value = CCtxParams->nbWorkers;
         break;
     case ZSTD_c_jobSize :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR(parameter_unsupported, "not compiled with multithreading");
-#else
-        assert(CCtxParams->jobSize <= INT_MAX);
-        *value = (int)CCtxParams->jobSize;
-        break;
-#endif
     case ZSTD_c_overlapLog :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR(parameter_unsupported, "not compiled with multithreading");
-#else
-        *value = CCtxParams->overlapLog;
-        break;
-#endif
     case ZSTD_c_rsyncable :
-#ifndef ZSTD_MULTITHREAD
         RETURN_ERROR(parameter_unsupported, "not compiled with multithreading");
-#else
-        *value = CCtxParams->rsyncable;
-        break;
-#endif
     case ZSTD_c_enableLongDistanceMatching :
         *value = CCtxParams->ldmParams.enableLdm;
         break;
@@ -1261,11 +1192,6 @@ size_t ZSTD_estimateCStreamSize(int compressionLevel)
  */
 ZSTD_frameProgression ZSTD_getFrameProgression(const ZSTD_CCtx* cctx)
 {
-#ifdef ZSTD_MULTITHREAD
-    if (cctx->appliedParams.nbWorkers > 0) {
-        return ZSTDMT_getFrameProgression(cctx->mtctx);
-    }
-#endif
     {   ZSTD_frameProgression fp;
         size_t const buffered = (cctx->inBuff == NULL) ? 0 :
                                 cctx->inBuffPos - cctx->inToCompress;
@@ -1285,11 +1211,6 @@ ZSTD_frameProgression ZSTD_getFrameProgression(const ZSTD_CCtx* cctx)
  */
 size_t ZSTD_toFlushNow(ZSTD_CCtx* cctx)
 {
-#ifdef ZSTD_MULTITHREAD
-    if (cctx->appliedParams.nbWorkers > 0) {
-        return ZSTDMT_toFlushNow(cctx->mtctx);
-    }
-#endif
     (void)cctx;
     return 0;   /* over-simplification; could also check if context is currently running in streaming mode, and in which case, report how many bytes are left to be flushed within output buffer */
 }
@@ -1533,7 +1454,7 @@ static size_t ZSTD_resetCCtx_internal(ZSTD_CCtx* zc,
             (unsigned)pledgedSrcSize, zc->appliedParams.fParams.contentSizeFlag);
         zc->blockSize = blockSize;
 
-        XXH64_reset(&zc->xxhState, 0);
+        xxh64_reset(&zc->xxhState, 0);
         zc->stage = ZSTDcs_init;
         zc->dictID = 0;
 
@@ -1879,18 +1800,6 @@ ZSTD_reduceTable_internal (U32* const table, U32 const size, U32 const reducerVa
     assert((size & (ZSTD_ROWSIZE-1)) == 0);  /* multiple of ZSTD_ROWSIZE */
     assert(size < (1U<<31));   /* can be casted to int */
 
-#if ZSTD_MEMORY_SANITIZER && !defined (ZSTD_MSAN_DONT_POISON_WORKSPACE)
-    /* To validate that the table re-use logic is sound, and that we don't
-     * access table space that we haven't cleaned, we re-"poison" the table
-     * space every time we mark it dirty.
-     *
-     * This function however is intended to operate on those dirty tables and
-     * re-clean them. So when this function is used correctly, we can unpoison
-     * the memory it operated on. This introduces a blind spot though, since
-     * if we now try to operate on __actually__ poisoned memory, we will not
-     * detect that. */
-    __msan_unpoison(table, size * sizeof(U32));
-#endif
 
     for (rowNb=0 ; rowNb < nbRows ; rowNb++) {
         int column;
@@ -2617,7 +2526,7 @@ static size_t ZSTD_compress_frameChunk (ZSTD_CCtx* cctx,
 
     DEBUGLOG(5, "ZSTD_compress_frameChunk (blockSize=%u)", (unsigned)blockSize);
     if (cctx->appliedParams.fParams.checksumFlag && srcSize)
-        XXH64_update(&cctx->xxhState, src, srcSize);
+        xxh64_update(&cctx->xxhState, src, srcSize);
 
     while (remaining) {
         ZSTD_matchState_t* const ms = &cctx->blockState.matchState;
@@ -3222,7 +3131,7 @@ static size_t ZSTD_writeEpilogue(ZSTD_CCtx* cctx, void* dst, size_t dstCapacity)
     }
 
     if (cctx->appliedParams.fParams.checksumFlag) {
-        U32 const checksum = (U32) XXH64_digest(&cctx->xxhState);
+        U32 const checksum = (U32) xxh64_digest(&cctx->xxhState);
         RETURN_ERROR_IF(dstCapacity<4, dstSize_tooSmall, "no room for checksum");
         DEBUGLOG(4, "ZSTD_writeEpilogue: write checksum : %08X", (unsigned)checksum);
         MEM_writeLE32(op, checksum);
@@ -3333,17 +3242,10 @@ size_t ZSTD_compress(void* dst, size_t dstCapacity,
                      int compressionLevel)
 {
     size_t result;
-#if ZSTD_COMPRESS_HEAPMODE
     ZSTD_CCtx* cctx = ZSTD_createCCtx();
     RETURN_ERROR_IF(!cctx, memory_allocation, "ZSTD_createCCtx failed");
     result = ZSTD_compressCCtx(cctx, dst, dstCapacity, src, srcSize, compressionLevel);
     ZSTD_freeCCtx(cctx);
-#else
-    ZSTD_CCtx ctxBody;
-    ZSTD_initCCtx(&ctxBody, ZSTD_defaultCMem);
-    result = ZSTD_compressCCtx(&ctxBody, dst, dstCapacity, src, srcSize, compressionLevel);
-    ZSTD_freeCCtxContent(&ctxBody);   /* can't free ctxBody itself, as it's on stack; free only heap content */
-#endif
     return result;
 }
 
@@ -3973,12 +3875,6 @@ static size_t ZSTD_compressStream_generic(ZSTD_CStream* zcs,
 
 static size_t ZSTD_nextInputSizeHint_MTorST(const ZSTD_CCtx* cctx)
 {
-#ifdef ZSTD_MULTITHREAD
-    if (cctx->appliedParams.nbWorkers >= 1) {
-        assert(cctx->mtctx != NULL);
-        return ZSTDMT_nextInputSizeHint(cctx->mtctx);
-    }
-#endif
     return ZSTD_nextInputSizeHint(cctx);
 
 }
@@ -4014,28 +3910,6 @@ size_t ZSTD_compressStream2( ZSTD_CCtx* cctx,
                 &cctx->requestedParams, cctx->pledgedSrcSizePlusOne-1, 0 /*dictSize*/);
 
 
-#ifdef ZSTD_MULTITHREAD
-        if ((cctx->pledgedSrcSizePlusOne-1) <= ZSTDMT_JOBSIZE_MIN) {
-            params.nbWorkers = 0; /* do not invoke multi-threading when src size is too small */
-        }
-        if (params.nbWorkers > 0) {
-            /* mt context creation */
-            if (cctx->mtctx == NULL) {
-                DEBUGLOG(4, "ZSTD_compressStream2: creating new mtctx for nbWorkers=%u",
-                            params.nbWorkers);
-                cctx->mtctx = ZSTDMT_createCCtx_advanced((U32)params.nbWorkers, cctx->customMem);
-                RETURN_ERROR_IF(cctx->mtctx == NULL, memory_allocation, "NULL pointer!");
-            }
-            /* mt compression */
-            DEBUGLOG(4, "call ZSTDMT_initCStream_internal as nbWorkers=%u", params.nbWorkers);
-            FORWARD_IF_ERROR( ZSTDMT_initCStream_internal(
-                        cctx->mtctx,
-                        prefixDict.dict, prefixDict.dictSize, prefixDict.dictContentType,
-                        cctx->cdict, params, cctx->pledgedSrcSizePlusOne-1) , "");
-            cctx->streamStage = zcss_load;
-            cctx->appliedParams.nbWorkers = params.nbWorkers;
-        } else
-#endif
         {   FORWARD_IF_ERROR( ZSTD_resetCStream_internal(cctx,
                             prefixDict.dict, prefixDict.dictSize, prefixDict.dictContentType,
                             cctx->cdict,
@@ -4046,31 +3920,6 @@ size_t ZSTD_compressStream2( ZSTD_CCtx* cctx,
     /* end of transparent initialization stage */
 
     /* compression stage */
-#ifdef ZSTD_MULTITHREAD
-    if (cctx->appliedParams.nbWorkers > 0) {
-        int const forceMaxProgress = (endOp == ZSTD_e_flush || endOp == ZSTD_e_end);
-        size_t flushMin;
-        assert(forceMaxProgress || endOp == ZSTD_e_continue /* Protection for a new flush type */);
-        if (cctx->cParamsChanged) {
-            ZSTDMT_updateCParams_whileCompressing(cctx->mtctx, &cctx->requestedParams);
-            cctx->cParamsChanged = 0;
-        }
-        do {
-            flushMin = ZSTDMT_compressStream_generic(cctx->mtctx, output, input, endOp);
-            if ( ZSTD_isError(flushMin)
-              || (endOp == ZSTD_e_end && flushMin == 0) ) { /* compression completed */
-                ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
-            }
-            FORWARD_IF_ERROR(flushMin, "ZSTDMT_compressStream_generic failed");
-        } while (forceMaxProgress && flushMin != 0 && output->pos < output->size);
-        DEBUGLOG(5, "completed ZSTD_compressStream2 delegating to ZSTDMT_compressStream_generic");
-        /* Either we don't require maximum forward progress, we've finished the
-         * flush, or we are out of output space.
-         */
-        assert(!forceMaxProgress || flushMin == 0 || output->pos == output->size);
-        return flushMin;
-    }
-#endif
     FORWARD_IF_ERROR( ZSTD_compressStream_generic(cctx, output, input, endOp) , "");
     DEBUGLOG(5, "completed ZSTD_compressStream2");
     return cctx->outBuffContentSize - cctx->outBuffFlushedSize; /* remaining to flush */
