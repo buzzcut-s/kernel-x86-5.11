@@ -1435,34 +1435,6 @@ __bfq_lookup_next_entity(struct bfq_service_tree *st, bool in_service)
 	return entity;
 }
 
-static int bfq_select_next_class(struct bfq_sched_data *sd)
-{
-	struct bfq_service_tree *st = sd->service_tree;
-	int i, class_idx, next_class = 0;
-	unsigned long last_check;
-
-	/*
-	 * we needed to guarantee a minimum bandwidth for each class (if
-	 * there is some active entity in this class). This should also
-	 * mitigate priority-inversion problems in case a low priority
-	 * task is holding file system resources.
-	 */
-	for (i = 0; i < BFQ_IOPRIO_CLASSES; i++) {
-		class_idx = (sd->next_class_index + i) % BFQ_IOPRIO_CLASSES;
-		last_check = sd->class_timeout_last_check;
-		if (time_is_before_jiffies(last_check + BFQ_CLASS_TIMEOUT)) {
-			sd->class_timeout_last_check = jiffies;
-			if (!RB_EMPTY_ROOT(&(st + class_idx)->active)) {
-				next_class = class_idx++;
-				class_idx %= BFQ_IOPRIO_CLASSES;
-				sd->next_class_index = class_idx;
-				break;
-			}
-		}
-	}
-	return next_class;
-}
-
 /**
  * bfq_lookup_next_entity - return the first eligible entity in @sd.
  * @sd: the sched_data.
@@ -1476,8 +1448,24 @@ static struct bfq_entity *bfq_lookup_next_entity(struct bfq_sched_data *sd,
 						 bool expiration)
 {
 	struct bfq_service_tree *st = sd->service_tree;
+	struct bfq_service_tree *idle_class_st = st + (BFQ_IOPRIO_CLASSES - 1);
 	struct bfq_entity *entity = NULL;
-	int class_idx = bfq_select_next_class(sd);
+	int class_idx = 0;
+
+	/*
+	 * Choose from idle class, if needed to guarantee a minimum
+	 * bandwidth to this class (and if there is some active entity
+	 * in idle class). This should also mitigate
+	 * priority-inversion problems in case a low priority task is
+	 * holding file system resources.
+	 */
+	if (time_is_before_jiffies(sd->bfq_class_idle_last_service +
+				   BFQ_CL_IDLE_TIMEOUT)) {
+		if (!RB_EMPTY_ROOT(&idle_class_st->active))
+			class_idx = BFQ_IOPRIO_CLASSES - 1;
+		/* About to be served if backlogged, or not yet backlogged */
+		sd->bfq_class_idle_last_service = jiffies;
+	}
 
 	/*
 	 * Find the next entity to serve for the highest-priority
