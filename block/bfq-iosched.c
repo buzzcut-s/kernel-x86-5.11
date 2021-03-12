@@ -4785,10 +4785,7 @@ static struct request *bfq_dispatch_rq_from_bfqq(struct bfq_data *bfqd,
 						 struct bfq_queue *bfqq)
 {
 	struct request *rq = bfqq->next_rq;
-	struct bfq_sched_data *sd = bfqq->entity.sched_data;
-	struct bfq_service_tree *st = sd->service_tree;
 	unsigned long service_to_charge;
-	int idx;
 
 	service_to_charge = bfq_serv_to_charge(rq, bfqq);
 
@@ -4823,17 +4820,6 @@ static struct request *bfq_dispatch_rq_from_bfqq(struct bfq_data *bfqd,
 	 * service.
 	 */
 	if (!(bfq_tot_busy_queues(bfqd) > 1 && bfq_class_idle(bfqq)))
-		goto return_rq;
-
-	/*
-	 * Expire bfqq, if other queues belong to higher priority
-	 * class are waiting for service.
-	 */
-	for (idx = bfqq->ioprio_class - 2; idx >= 0; idx--) {
-		if (!RB_EMPTY_ROOT(&(st + idx)->active))
-			break;
-	}
-	if (idx < 0)
 		goto return_rq;
 
 	bfq_bfqq_expire(bfqd, bfqq, false, BFQQE_BUDGET_EXHAUSTED);
