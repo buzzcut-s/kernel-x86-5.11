@@ -309,7 +309,8 @@ struct bfq_group *bfqq_group(struct bfq_queue *bfqq)
 {
 	struct bfq_entity *group_entity = bfqq->entity.parent;
 
-	return group_entity ? bfq_entity_to_bfqg(group_entity) :
+	return group_entity ? container_of(group_entity, struct bfq_group,
+					   entity) :
 			      bfqq->bfqd->root_group;
 }
 
@@ -611,7 +612,8 @@ struct bfq_group *bfq_find_set_group(struct bfq_data *bfqd,
 	 */
 	entity = &bfqg->entity;
 	for_each_entity(entity) {
-		struct bfq_group *curr_bfqg = bfq_entity_to_bfqg(entity);
+		struct bfq_group *curr_bfqg = container_of(entity,
+						struct bfq_group, entity);
 		if (curr_bfqg != bfqd->root_group) {
 			parent = bfqg_parent(curr_bfqg);
 			if (!parent)
