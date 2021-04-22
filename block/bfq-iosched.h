@@ -22,7 +22,6 @@
 #define BFQ_DEFAULT_QUEUE_IOPRIO	4
 
 #define BFQ_WEIGHT_LEGACY_DFL	100
-#define BFQ_DEFAULT_GRP_IOPRIO	0
 #define BFQ_DEFAULT_GRP_CLASS	IOPRIO_CLASS_BE
 
 #define MAX_PID_STR_LENGTH 12
@@ -543,14 +542,6 @@ struct bfq_data {
 	 */
 	unsigned int num_groups_with_pending_reqs;
 
-#ifdef CONFIG_BFQ_GROUP_IOSCHED
-	/*
-	 * Per-class (RT, BE, IDLE) number of bfq_groups waiting for
-	 * service.
-	 */
-	unsigned int busy_groups[3];
-#endif
-
 	/*
 	 * Per-class (RT, BE, IDLE) number of bfq_queues containing
 	 * requests (including the queue in service, even if it is
@@ -893,7 +884,6 @@ struct bfq_group_data {
 	struct blkcg_policy_data pd;
 
 	unsigned int weight;
-	unsigned short ioprio;
 };
 
 /**
@@ -949,11 +939,6 @@ struct bfq_group {
 	struct bfq_entity *my_entity;
 
 	int active_entities;
-
-	/* current ioprio and ioprio class */
-	unsigned short ioprio, ioprio_class;
-	/* next ioprio and ioprio class if a change is in progress */
-	unsigned short new_ioprio, new_ioprio_class;
 
 	struct rb_root rq_pos_tree;
 
@@ -1023,7 +1008,6 @@ void bfq_bfqq_move(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 void bfq_init_entity(struct bfq_entity *entity, struct bfq_group *bfqg);
 void bfq_bic_update_cgroup(struct bfq_io_cq *bic, struct bio *bio);
 void bfq_end_wr_async(struct bfq_data *bfqd);
-struct bfq_group_data *blkcg_to_bfqgd(struct blkcg *blkcg);
 struct bfq_group *bfq_find_set_group(struct bfq_data *bfqd,
 				     struct blkcg *blkcg);
 struct blkcg_gq *bfqg_to_blkg(struct bfq_group *bfqg);
@@ -1070,7 +1054,6 @@ extern struct blkcg_policy blkcg_policy_bfq;
 
 struct bfq_group *bfq_bfqq_to_bfqg(struct bfq_queue *bfqq);
 struct bfq_queue *bfq_entity_to_bfqq(struct bfq_entity *entity);
-unsigned int bfq_class_idx(struct bfq_entity *entity);
 unsigned int bfq_tot_busy_queues(struct bfq_data *bfqd);
 struct bfq_service_tree *bfq_entity_service_tree(struct bfq_entity *entity);
 struct bfq_entity *bfq_entity_of(struct rb_node *node);

@@ -426,7 +426,6 @@ void bfq_schedule_dispatch(struct bfq_data *bfqd)
 	}
 }
 
-#define bfq_class_rt(bfqq)	((bfqq)->ioprio_class == IOPRIO_CLASS_RT)
 #define bfq_class_idle(bfqq)	((bfqq)->ioprio_class == IOPRIO_CLASS_IDLE)
 
 #define bfq_sample_valid(samples)	((samples) > 80)
@@ -1969,9 +1968,6 @@ static void bfq_check_waker(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 	    bfqd->last_completed_rq_bfqq == bfqq->waker_bfqq)
 		return;
 
-	if (bfq_class_rt(bfqq) && !bfq_class_rt(bfqd->last_completed_rq_bfqq))
-		return;
-
 	if (bfqd->last_completed_rq_bfqq !=
 	    bfqq->tentative_waker_bfqq) {
 		/*
@@ -2291,9 +2287,9 @@ static bool bfq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio,
 
 	ret = blk_mq_sched_try_merge(q, bio, nr_segs, &free);
 
+	spin_unlock_irq(&bfqd->lock);
 	if (free)
 		blk_mq_free_request(free);
-	spin_unlock_irq(&bfqd->lock);
 
 	return ret;
 }
@@ -2625,9 +2621,6 @@ static bool bfq_may_be_close_cooperator(struct bfq_queue *bfqq,
 	 * queues.
 	 */
 	if (!bfq_bfqq_sync(bfqq) || !bfq_bfqq_sync(new_bfqq))
-		return false;
-
-	if (bfq_class_rt(bfqq) && !bfq_class_rt(new_bfqq))
 		return false;
 
 	return true;
@@ -4353,11 +4346,6 @@ static bool bfq_better_to_idle(struct bfq_queue *bfqq)
 	if (unlikely(bfqd->strict_guarantees))
 		return true;
 
-#ifdef CONFIG_BFQ_GROUP_IOSCHED
-	if (!bfq_class_rt(bfqq) && bfqd->busy_groups[0])
-		return false;
-#endif
-
 	/*
 	 * Idling is performed only if slice_idle > 0. In addition, we
 	 * do not idle if
@@ -4488,9 +4476,6 @@ bfq_choose_bfqq_for_injection(struct bfq_data *bfqd)
 				limit = min_t(unsigned int, 1, limit);
 			else
 				limit = in_serv_bfqq->inject_limit;
-
-			if (bfq_class_rt(in_serv_bfqq) && !bfq_class_rt(bfqq))
-				continue;
 
 			if (bfqd->rq_in_driver < limit) {
 				bfqd->rqs_injected = true;
@@ -4680,7 +4665,7 @@ check_queue:
 		 * may not be minimized, because the waker queue may
 		 * happen to be served only after other queues.
 		 */
-		if (async_bfqq && !bfq_class_rt(bfqq) &&
+		if (async_bfqq &&
 		    icq_to_bic(async_bfqq->next_rq->elv.icq) == bfqq->bic &&
 		    bfq_serv_to_charge(async_bfqq->next_rq, async_bfqq) <=
 		    bfq_bfqq_budget_left(async_bfqq))
@@ -4833,16 +4818,12 @@ static struct request *bfq_dispatch_rq_from_bfqq(struct bfq_data *bfqd,
 	/*
 	 * Expire bfqq, pretending that its budget expired, if bfqq
 	 * belongs to CLASS_IDLE and other queues are waiting for
-	 * service, or if bfqq not belongs to CLASS_RT and CLASS_RT
-	 * is waiting for service.
+	 * service.
 	 */
-#ifdef CONFIG_BFQ_GROUP_IOSCHED
-	if ((bfq_tot_busy_queues(bfqd) > 1 && bfq_class_idle(bfqq)) ||
-	    (!bfq_class_rt(bfqq) && bfqd->busy_groups[0]))
-#else
-	if (bfq_tot_busy_queues(bfqd) > 1 && bfq_class_idle(bfqq))
-#endif
-		bfq_bfqq_expire(bfqd, bfqq, false, BFQQE_BUDGET_EXHAUSTED);
+	if (!(bfq_tot_busy_queues(bfqd) > 1 && bfq_class_idle(bfqq)))
+		goto return_rq;
+
+	bfq_bfqq_expire(bfqd, bfqq, false, BFQQE_BUDGET_EXHAUSTED);
 
 return_rq:
 	return rq;
@@ -5276,12 +5257,7 @@ static void bfq_check_ioprio_change(struct bfq_io_cq *bic, struct bio *bio)
 {
 	struct bfq_data *bfqd = bic_to_bfqd(bic);
 	struct bfq_queue *bfqq;
-#ifdef CONFIG_BFQ_GROUP_IOSCHED
-	struct bfq_group_data *bfqgd = blkcg_to_bfqgd(__bio_blkcg(bio));
-	int ioprio = bfqgd->ioprio ?: bic->icq.ioc->ioprio;
-#else
 	int ioprio = bic->icq.ioc->ioprio;
-#endif
 
 	/*
 	 * This condition may trigger on a newly created bic, be sure to
@@ -5997,8 +5973,7 @@ static void bfq_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	     bfqd->in_service_queue != NULL &&
 	     bfq_tot_busy_queues(bfqd) == 1 + bfq_bfqq_busy(bfqq) &&
 	     (bfqq->waker_bfqq == bfqd->in_service_queue ||
-	      bfqd->in_service_queue->waker_bfqq == bfqq)) ||
-	    at_head || blk_rq_is_passthrough(rq)) {
+	      bfqd->in_service_queue->waker_bfqq == bfqq)) || at_head) {
 		if (at_head)
 			list_add(&rq->queuelist, &bfqd->dispatch);
 		else
